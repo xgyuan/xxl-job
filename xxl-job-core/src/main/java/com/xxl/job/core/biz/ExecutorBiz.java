@@ -16,6 +16,14 @@ public interface ExecutorBiz {
     public ReturnT<String> beat();
 
     /**
+     * idle beat
+     *
+     * @param jobId
+     * @return
+     */
+    public ReturnT<String> idleBeat(int jobId);
+
+    /**
      * kill
      * @param jobId
      * @return
@@ -29,7 +37,7 @@ public interface ExecutorBiz {
      * @param fromLineNum
      * @return
      */
-    public ReturnT<LogResult> log(long logDateTim, int logId, int fromLineNum);
+    public ReturnT<LogResult> log(long logDateTim, long logId, int fromLineNum);
 
     /**
      * run

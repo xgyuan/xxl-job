@@ -1,15 +1,14 @@
 package com.xxl.job.admin.core.util;
 
-
-import org.codehaus.jackson.JsonGenerationException;
-import org.codehaus.jackson.JsonParseException;
-import org.codehaus.jackson.map.JsonMappingException;
-import org.codehaus.jackson.map.ObjectMapper;
-import org.codehaus.jackson.type.TypeReference;
+import com.fasterxml.jackson.core.JsonGenerationException;
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Jackson util
@@ -20,6 +19,8 @@ import java.util.Map;
  * @author xuxueli 2015-9-25 18:02:56
  */
 public class JacksonUtil {
+	private static Logger logger = LoggerFactory.getLogger(JacksonUtil.class);
+
     private final static ObjectMapper objectMapper = new ObjectMapper();
     public static ObjectMapper getInstance() {
         return objectMapper;
@@ -36,11 +37,11 @@ public class JacksonUtil {
     	try {
 			return getInstance().writeValueAsString(obj);
 		} catch (JsonGenerationException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage(), e);
 		} catch (JsonMappingException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage(), e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage(), e);
 		}
         return null;
     }
@@ -57,37 +58,35 @@ public class JacksonUtil {
     	try {
 			return getInstance().readValue(jsonStr, clazz);
 		} catch (JsonParseException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage(), e);
 		} catch (JsonMappingException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage(), e);
 		} catch (IOException e) {
-			e.printStackTrace();
-		}
-    	return null;
-    }
-    public static <T> T readValueRefer(String jsonStr, Class<T> clazz) {
-    	try {
-			return getInstance().readValue(jsonStr, new TypeReference<T>() { });
-		} catch (JsonParseException e) {
-			e.printStackTrace();
-		} catch (JsonMappingException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage(), e);
 		}
     	return null;
     }
 
-    public static void main(String[] args) {
+	/**
+	 * string --> List<Bean>...
+	 *
+	 * @param jsonStr
+	 * @param parametrized
+	 * @param parameterClasses
+	 * @param <T>
+	 * @return
+	 */
+	public static <T> T readValue(String jsonStr, Class<?> parametrized, Class<?>... parameterClasses) {
 		try {
-			Map<String, String> map = new HashMap<String, String>();
-			map.put("aaa", "111");
-			map.put("bbb", "222");
-			String json = writeValueAsString(map);
-			System.out.println(json);
-			System.out.println(readValue(json, Map.class));
-		} catch (Exception e) {
-			e.printStackTrace();
+			JavaType javaType = getInstance().getTypeFactory().constructParametricType(parametrized, parameterClasses);
+			return getInstance().readValue(jsonStr, javaType);
+		} catch (JsonParseException e) {
+			logger.error(e.getMessage(), e);
+		} catch (JsonMappingException e) {
+			logger.error(e.getMessage(), e);
+		} catch (IOException e) {
+			logger.error(e.getMessage(), e);
 		}
+		return null;
 	}
 }

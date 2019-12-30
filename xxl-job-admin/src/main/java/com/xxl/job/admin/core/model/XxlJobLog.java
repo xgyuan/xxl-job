@@ -8,19 +8,18 @@ import java.util.Date;
  */
 public class XxlJobLog {
 	
-	private int id;
+	private long id;
 	
 	// job info
 	private int jobGroup;
 	private int jobId;
 
-	// glueType
-	private String glueType;
-
 	// execute info
 	private String executorAddress;
 	private String executorHandler;
 	private String executorParam;
+	private String executorShardingParam;
+	private int executorFailRetryCount;
 	
 	// trigger info
 	private Date triggerTime;
@@ -32,11 +31,14 @@ public class XxlJobLog {
 	private int handleCode;
 	private String handleMsg;
 
-	public int getId() {
+	// alarm info
+	private int alarmStatus;
+
+	public long getId() {
 		return id;
 	}
 
-	public void setId(int id) {
+	public void setId(long id) {
 		this.id = id;
 	}
 
@@ -54,14 +56,6 @@ public class XxlJobLog {
 
 	public void setJobId(int jobId) {
 		this.jobId = jobId;
-	}
-
-	public String getGlueType() {
-		return glueType;
-	}
-
-	public void setGlueType(String glueType) {
-		this.glueType = glueType;
 	}
 
 	public String getExecutorAddress() {
@@ -86,6 +80,22 @@ public class XxlJobLog {
 
 	public void setExecutorParam(String executorParam) {
 		this.executorParam = executorParam;
+	}
+
+	public String getExecutorShardingParam() {
+		return executorShardingParam;
+	}
+
+	public void setExecutorShardingParam(String executorShardingParam) {
+		this.executorShardingParam = executorShardingParam;
+	}
+
+	public int getExecutorFailRetryCount() {
+		return executorFailRetryCount;
+	}
+
+	public void setExecutorFailRetryCount(int executorFailRetryCount) {
+		this.executorFailRetryCount = executorFailRetryCount;
 	}
 
 	public Date getTriggerTime() {
@@ -135,4 +145,13 @@ public class XxlJobLog {
 	public void setHandleMsg(String handleMsg) {
 		this.handleMsg = handleMsg;
 	}
+
+	public int getAlarmStatus() {
+		return alarmStatus;
+	}
+
+	public void setAlarmStatus(int alarmStatus) {
+		this.alarmStatus = alarmStatus;
+	}
+
 }

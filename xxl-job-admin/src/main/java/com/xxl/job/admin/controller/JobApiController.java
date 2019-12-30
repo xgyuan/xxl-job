@@ -1,122 +1,129 @@
 package com.xxl.job.admin.controller;
 
-import com.xxl.job.admin.controller.annotation.PermessionLimit;
-import com.xxl.job.admin.core.model.XxlJobInfo;
-import com.xxl.job.admin.core.model.XxlJobLog;
-import com.xxl.job.admin.core.schedule.XxlJobDynamicScheduler;
-import com.xxl.job.admin.dao.IXxlJobInfoDao;
-import com.xxl.job.admin.dao.IXxlJobLogDao;
-import com.xxl.job.admin.dao.IXxlJobRegistryDao;
+import com.xxl.job.admin.controller.annotation.PermissionLimit;
+import com.xxl.job.admin.core.conf.XxlJobAdminConfig;
+import com.xxl.job.admin.core.exception.XxlJobException;
+import com.xxl.job.admin.core.util.JacksonUtil;
+import com.xxl.job.core.biz.AdminBiz;
 import com.xxl.job.core.biz.model.HandleCallbackParam;
 import com.xxl.job.core.biz.model.RegistryParam;
 import com.xxl.job.core.biz.model.ReturnT;
-import com.xxl.job.core.util.AdminApiUtil;
-import org.apache.commons.lang.StringUtils;
-import org.quartz.SchedulerException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.xxl.job.core.util.XxlJobRemotingUtil;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import javax.annotation.Resource;
-import java.text.MessageFormat;
-import java.util.Date;
+import javax.servlet.http.HttpServletRequest;
+import java.util.List;
 
 /**
  * Created by xuxueli on 17/5/10.
  */
 @Controller
+@RequestMapping("/api")
 public class JobApiController {
-    private static Logger logger = LoggerFactory.getLogger(JobApiController.class);
 
     @Resource
-    public IXxlJobLogDao xxlJobLogDao;
-    @Resource
-    private IXxlJobInfoDao xxlJobInfoDao;
-    @Resource
-    private IXxlJobRegistryDao xxlJobRegistryDao;
+    private AdminBiz adminBiz;
 
 
-    @RequestMapping(value= AdminApiUtil.CALLBACK, method = RequestMethod.POST, consumes = "application/json")
-    @ResponseBody
-    @PermessionLimit(limit=false)
-    public ReturnT<String> callback(@RequestBody HandleCallbackParam handleCallbackParam){
+    // ---------------------- base ----------------------
 
-
-        // valid log item
-        XxlJobLog log = xxlJobLogDao.load(handleCallbackParam.getLogId());
-        if (log == null) {
-            return new ReturnT<String>(ReturnT.FAIL_CODE, "log item not found.");
+    /**
+     * valid access token
+     */
+    private void validAccessToken(HttpServletRequest request){
+        if (XxlJobAdminConfig.getAdminConfig().getAccessToken()!=null
+                && XxlJobAdminConfig.getAdminConfig().getAccessToken().trim().length()>0
+                && !XxlJobAdminConfig.getAdminConfig().getAccessToken().equals(request.getHeader(XxlJobRemotingUtil.XXL_RPC_ACCESS_TOKEN))) {
+            throw new XxlJobException("The access token is wrong.");
         }
+    }
 
-        // trigger success, to trigger child job, and avoid repeat trigger child job
-        String childTriggerMsg = null;
-        if (ReturnT.SUCCESS_CODE==handleCallbackParam.getExecuteResult().getCode() && ReturnT.SUCCESS_CODE!=log.getHandleCode()) {
-            XxlJobInfo xxlJobInfo = xxlJobInfoDao.loadById(log.getJobId());
-            if (xxlJobInfo!=null && StringUtils.isNotBlank(xxlJobInfo.getChildJobKey())) {
-                childTriggerMsg = "<hr>";
-                String[] childJobKeys = xxlJobInfo.getChildJobKey().split(",");
-                for (int i = 0; i < childJobKeys.length; i++) {
-                    String[] jobKeyArr = childJobKeys[i].split("_");
-                    if (jobKeyArr!=null && jobKeyArr.length==2) {
-                        XxlJobInfo childJobInfo = xxlJobInfoDao.loadById(Integer.valueOf(jobKeyArr[1]));
-                        if (childJobInfo!=null) {
-                            try {
-                                boolean ret = XxlJobDynamicScheduler.triggerJob(String.valueOf(childJobInfo.getId()), String.valueOf(childJobInfo.getJobGroup()));
-
-                                // add msg
-                                childTriggerMsg += MessageFormat.format("<br> {0}/{1} 触发子任务成功, 子任务Key: {2}, status: {3}, 子任务描述: {4}",
-                                        (i+1), childJobKeys.length, childJobKeys[i], ret, childJobInfo.getJobDesc());
-                            } catch (SchedulerException e) {
-                                logger.error("", e);
-                            }
-                        } else {
-                            childTriggerMsg += MessageFormat.format("<br> {0}/{1} 触发子任务失败, 子任务xxlJobInfo不存在, 子任务Key: {2}",
-                                    (i+1), childJobKeys.length, childJobKeys[i]);
-                        }
-                    } else {
-                        childTriggerMsg += MessageFormat.format("<br> {0}/{1} 触发子任务失败, 子任务Key格式错误, 子任务Key: {2}",
-                                (i+1), childJobKeys.length, childJobKeys[i]);
-                    }
-                }
-
+    /**
+     * parse Param
+     */
+    private Object parseParam(String data, Class<?> parametrized, Class<?>... parameterClasses){
+        Object param = null;
+        try {
+            if (parameterClasses != null) {
+                param = JacksonUtil.readValue(data, parametrized, parameterClasses);
+            } else {
+                param = JacksonUtil.readValue(data, parametrized);
             }
+        } catch (Exception e) { }
+        if (param==null) {
+            throw new XxlJobException("The request data invalid.");
         }
-
-        // handle msg
-        StringBuffer handleMsg = new StringBuffer();
-        if (log.getHandleMsg()!=null) {
-            handleMsg.append(log.getHandleMsg()).append("<br>");
-        }
-        if (handleCallbackParam.getExecuteResult().getMsg() != null) {
-            handleMsg.append(handleCallbackParam.getExecuteResult().getMsg());
-        }
-        if (childTriggerMsg !=null) {
-            handleMsg.append("<br>子任务触发备注：").append(childTriggerMsg);
-        }
-
-        // success, save log
-        log.setHandleTime(new Date());
-        log.setHandleCode(handleCallbackParam.getExecuteResult().getCode());
-        log.setHandleMsg(handleMsg.toString());
-        xxlJobLogDao.updateHandleInfo(log);
-
-        return ReturnT.SUCCESS;
+        return param;
     }
 
+    // ---------------------- admin biz ----------------------
 
-    @RequestMapping(value=AdminApiUtil.REGISTRY, method = RequestMethod.POST, consumes = "application/json")
+    /**
+     * callback
+     *
+     * @param data
+     * @return
+     */
+    @RequestMapping("/callback")
     @ResponseBody
-    @PermessionLimit(limit=false)
-    public ReturnT<String> registry(@RequestBody RegistryParam registryParam){
-        int ret = xxlJobRegistryDao.registryUpdate(registryParam.getRegistGroup(), registryParam.getRegistryKey(), registryParam.getRegistryValue());
-        if (ret < 1) {
-            xxlJobRegistryDao.registrySave(registryParam.getRegistGroup(), registryParam.getRegistryKey(), registryParam.getRegistryValue());
-        }
-        return ReturnT.SUCCESS;
+    @PermissionLimit(limit=false)
+    public ReturnT<String> callback(HttpServletRequest request, @RequestBody(required = false) String data) {
+        // valid
+        validAccessToken(request);
+
+        // param
+        List<HandleCallbackParam> callbackParamList = (List<HandleCallbackParam>) parseParam(data, List.class, HandleCallbackParam.class);
+
+        // invoke
+        return adminBiz.callback(callbackParamList);
     }
+
+
+
+    /**
+     * registry
+     *
+     * @param data
+     * @return
+     */
+    @RequestMapping("/registry")
+    @ResponseBody
+    @PermissionLimit(limit=false)
+    public ReturnT<String> registry(HttpServletRequest request, @RequestBody(required = false) String data) {
+        // valid
+        validAccessToken(request);
+
+        // param
+        RegistryParam registryParam = (RegistryParam) parseParam(data, RegistryParam.class);
+
+        // invoke
+        return adminBiz.registry(registryParam);
+    }
+
+    /**
+     * registry remove
+     *
+     * @param data
+     * @return
+     */
+    @RequestMapping("/registryRemove")
+    @ResponseBody
+    @PermissionLimit(limit=false)
+    public ReturnT<String> registryRemove(HttpServletRequest request, @RequestBody(required = false) String data) {
+        // valid
+        validAccessToken(request);
+
+        // param
+        RegistryParam registryParam = (RegistryParam) parseParam(data, RegistryParam.class);
+
+        // invoke
+        return adminBiz.registryRemove(registryParam);
+    }
+
+    // ---------------------- job biz ----------------------
 
 }

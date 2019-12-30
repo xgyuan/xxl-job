@@ -1,7 +1,6 @@
 package com.xxl.job.core.log;
 
 import com.xxl.job.core.biz.model.LogResult;
-import com.xxl.job.core.executor.XxlJobExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,33 +17,71 @@ public class XxlJobFileAppender {
 	
 	// for JobThread (support log for child thread of job handler)
 	//public static ThreadLocal<String> contextHolder = new ThreadLocal<String>();
-	public static InheritableThreadLocal<String> contextHolder = new InheritableThreadLocal<String>();
-	public static SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-	
+	public static final InheritableThreadLocal<String> contextHolder = new InheritableThreadLocal<String>();
+
+
 	/**
-	 * log filename: yyyy-MM-dd/9999.log
+	 * log base path
+	 *
+	 * strut like:
+	 * 	---/
+	 * 	---/gluesource/
+	 * 	---/gluesource/10_1514171108000.js
+	 * 	---/gluesource/10_1514171108000.js
+	 * 	---/2017-12-25/
+	 * 	---/2017-12-25/639.log
+	 * 	---/2017-12-25/821.log
+	 *
+	 */
+	private static String logBasePath = "/data/applogs/xxl-job/jobhandler";
+	private static String glueSrcPath = logBasePath.concat("/gluesource");
+	public static void initLogPath(String logPath){
+		// init
+		if (logPath!=null && logPath.trim().length()>0) {
+			logBasePath = logPath;
+		}
+		// mk base dir
+		File logPathDir = new File(logBasePath);
+		if (!logPathDir.exists()) {
+			logPathDir.mkdirs();
+		}
+		logBasePath = logPathDir.getPath();
+
+		// mk glue dir
+		File glueBaseDir = new File(logPathDir, "gluesource");
+		if (!glueBaseDir.exists()) {
+			glueBaseDir.mkdirs();
+		}
+		glueSrcPath = glueBaseDir.getPath();
+	}
+	public static String getLogPath() {
+		return logBasePath;
+	}
+	public static String getGlueSrcPath() {
+		return glueSrcPath;
+	}
+
+	/**
+	 * log filename, like "logPath/yyyy-MM-dd/9999.log"
 	 *
 	 * @param triggerDate
 	 * @param logId
 	 * @return
 	 */
-	public static String makeLogFileName(Date triggerDate, int logId) {
+	public static String makeLogFileName(Date triggerDate, long logId) {
 
-        // filePath/
-        File filePathDir = new File(XxlJobExecutor.logPath);
-        if (!filePathDir.exists()) {
-            filePathDir.mkdirs();
-        }
+		// filePath/yyyy-MM-dd
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");	// avoid concurrent problem, can not be static
+		File logFilePath = new File(getLogPath(), sdf.format(triggerDate));
+		if (!logFilePath.exists()) {
+			logFilePath.mkdir();
+		}
 
-        // filePath/yyyy-MM-dd/
-        String nowFormat = sdf.format(new Date());
-        File filePathDateDir = new File(filePathDir, nowFormat);
-        if (!filePathDateDir.exists()) {
-            filePathDateDir.mkdirs();
-        }
-
-        // filePath/yyyy-MM-dd/9999.log
-		String logFileName = XxlJobFileAppender.sdf.format(triggerDate).concat("/").concat(String.valueOf(logId)).concat(".log");
+		// filePath/yyyy-MM-dd/9999.log
+		String logFileName = logFilePath.getPath()
+				.concat(File.separator)
+				.concat(String.valueOf(logId))
+				.concat(".log");
 		return logFileName;
 	}
 
@@ -56,17 +93,11 @@ public class XxlJobFileAppender {
 	 */
 	public static void appendLog(String logFileName, String appendLog) {
 
-		// log
-		if (appendLog == null) {
-			appendLog = "";
-		}
-		appendLog += "\r\n";
-
 		// log file
 		if (logFileName==null || logFileName.trim().length()==0) {
 			return;
 		}
-		File logFile = new File(XxlJobExecutor.logPath, logFileName);
+		File logFile = new File(logFileName);
 
 		if (!logFile.exists()) {
 			try {
@@ -76,25 +107,29 @@ public class XxlJobFileAppender {
 				return;
 			}
 		}
+
+		// log
+		if (appendLog == null) {
+			appendLog = "";
+		}
+		appendLog += "\r\n";
 		
 		// append file content
+		FileOutputStream fos = null;
 		try {
-			FileOutputStream fos = null;
-			try {
-				fos = new FileOutputStream(logFile, true);
-				fos.write(appendLog.getBytes("utf-8"));
-				fos.flush();
-			} finally {
-				if (fos != null) {
-					try {
-						fos.close();
-					} catch (IOException e) {
-						logger.error(e.getMessage(), e);
-					}
-				}
-			} 
+			fos = new FileOutputStream(logFile, true);
+			fos.write(appendLog.getBytes("utf-8"));
+			fos.flush();
 		} catch (Exception e) {
 			logger.error(e.getMessage(), e);
+		} finally {
+			if (fos != null) {
+				try {
+					fos.close();
+				} catch (IOException e) {
+					logger.error(e.getMessage(), e);
+				}
+			}
 		}
 		
 	}
@@ -111,7 +146,7 @@ public class XxlJobFileAppender {
 		if (logFileName==null || logFileName.trim().length()==0) {
             return new LogResult(fromLineNum, 0, "readLog fail, logFile not found", true);
 		}
-		File logFile = new File(XxlJobExecutor.logPath, logFileName);
+		File logFile = new File(logFileName);
 
 		if (!logFile.exists()) {
             return new LogResult(fromLineNum, 0, "readLog fail, logFile not exists", true);
@@ -174,13 +209,13 @@ public class XxlJobFileAppender {
 				return sb.toString();
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			logger.error(e.getMessage(), e);
 		} finally {
 			if (reader != null) {
 				try {
 					reader.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					logger.error(e.getMessage(), e);
 				}
 			}
 		}

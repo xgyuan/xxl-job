@@ -30,20 +30,36 @@ public class ExecutorBizImpl implements ExecutorBiz {
     }
 
     @Override
+    public ReturnT<String> idleBeat(int jobId) {
+
+        // isRunningOrHasQueue
+        boolean isRunningOrHasQueue = false;
+        JobThread jobThread = XxlJobExecutor.loadJobThread(jobId);
+        if (jobThread != null && jobThread.isRunningOrHasQueue()) {
+            isRunningOrHasQueue = true;
+        }
+
+        if (isRunningOrHasQueue) {
+            return new ReturnT<String>(ReturnT.FAIL_CODE, "job thread is running or has trigger queue.");
+        }
+        return ReturnT.SUCCESS;
+    }
+
+    @Override
     public ReturnT<String> kill(int jobId) {
         // kill handlerThread, and create new one
         JobThread jobThread = XxlJobExecutor.loadJobThread(jobId);
         if (jobThread != null) {
-            XxlJobExecutor.removeJobThread(jobId, "人工手动终止");
+            XxlJobExecutor.removeJobThread(jobId, "scheduling center kill job.");
             return ReturnT.SUCCESS;
         }
 
-        return new ReturnT<String>(ReturnT.SUCCESS_CODE, "job thread aleady killed.");
+        return new ReturnT<String>(ReturnT.SUCCESS_CODE, "job thread already killed.");
     }
 
     @Override
-    public ReturnT<LogResult> log(long logDateTim, int logId, int fromLineNum) {
-        // log filename: yyyy-MM-dd/9999.log
+    public ReturnT<LogResult> log(long logDateTim, long logId, int fromLineNum) {
+        // log filename: logPath/yyyy-MM-dd/9999.log
         String logFileName = XxlJobFileAppender.makeLogFileName(new Date(logDateTim), logId);
 
         LogResult logResult = XxlJobFileAppender.readLog(logFileName, fromLineNum);
@@ -58,12 +74,16 @@ public class ExecutorBizImpl implements ExecutorBiz {
         String removeOldReason = null;
 
         // valid：jobHandler + jobThread
-        if (GlueTypeEnum.BEAN==GlueTypeEnum.match(triggerParam.getGlueType())) {
+        GlueTypeEnum glueTypeEnum = GlueTypeEnum.match(triggerParam.getGlueType());
+        if (GlueTypeEnum.BEAN == glueTypeEnum) {
+
+            // new jobhandler
+            IJobHandler newJobHandler = XxlJobExecutor.loadJobHandler(triggerParam.getExecutorHandler());
 
             // valid old jobThread
-            if (jobThread != null && jobHandler!=null && jobThread.getHandler() != jobHandler) {
+            if (jobThread!=null && jobHandler != newJobHandler) {
                 // change handler, need kill old thread
-                removeOldReason = "更新JobHandler或更换任务模式,终止旧任务线程";
+                removeOldReason = "change jobhandler or glue type, and terminate the old job thread.";
 
                 jobThread = null;
                 jobHandler = null;
@@ -71,20 +91,20 @@ public class ExecutorBizImpl implements ExecutorBiz {
 
             // valid handler
             if (jobHandler == null) {
-                jobHandler = XxlJobExecutor.loadJobHandler(triggerParam.getExecutorHandler());
+                jobHandler = newJobHandler;
                 if (jobHandler == null) {
                     return new ReturnT<String>(ReturnT.FAIL_CODE, "job handler [" + triggerParam.getExecutorHandler() + "] not found.");
                 }
             }
 
-        } else if (GlueTypeEnum.GLUE_GROOVY==GlueTypeEnum.match(triggerParam.getGlueType())) {
+        } else if (GlueTypeEnum.GLUE_GROOVY == glueTypeEnum) {
 
             // valid old jobThread
             if (jobThread != null &&
                     !(jobThread.getHandler() instanceof GlueJobHandler
                         && ((GlueJobHandler) jobThread.getHandler()).getGlueUpdatetime()==triggerParam.getGlueUpdatetime() )) {
                 // change handler or gluesource updated, need kill old thread
-                removeOldReason = "更新任务逻辑或更换任务模式,终止旧任务线程";
+                removeOldReason = "change job source or glue type, and terminate the old job thread.";
 
                 jobThread = null;
                 jobHandler = null;
@@ -96,19 +116,18 @@ public class ExecutorBizImpl implements ExecutorBiz {
                     IJobHandler originJobHandler = GlueFactory.getInstance().loadNewInstance(triggerParam.getGlueSource());
                     jobHandler = new GlueJobHandler(originJobHandler, triggerParam.getGlueUpdatetime());
                 } catch (Exception e) {
-                    logger.error("", e);
+                    logger.error(e.getMessage(), e);
                     return new ReturnT<String>(ReturnT.FAIL_CODE, e.getMessage());
                 }
             }
-        } else if (GlueTypeEnum.GLUE_SHELL==GlueTypeEnum.match(triggerParam.getGlueType())
-                || GlueTypeEnum.GLUE_PYTHON==GlueTypeEnum.match(triggerParam.getGlueType()) ) {
+        } else if (glueTypeEnum!=null && glueTypeEnum.isScript()) {
 
             // valid old jobThread
             if (jobThread != null &&
                     !(jobThread.getHandler() instanceof ScriptJobHandler
                             && ((ScriptJobHandler) jobThread.getHandler()).getGlueUpdatetime()==triggerParam.getGlueUpdatetime() )) {
                 // change script or gluesource updated, need kill old thread
-                removeOldReason = "更新任务逻辑或更换任务模式,终止旧任务线程";
+                removeOldReason = "change job source or glue type, and terminate the old job thread.";
 
                 jobThread = null;
                 jobHandler = null;
@@ -128,12 +147,12 @@ public class ExecutorBizImpl implements ExecutorBiz {
             if (ExecutorBlockStrategyEnum.DISCARD_LATER == blockStrategy) {
                 // discard when running
                 if (jobThread.isRunningOrHasQueue()) {
-                    return new ReturnT<String>(ReturnT.FAIL_CODE, "阻塞处理策略-生效："+ExecutorBlockStrategyEnum.DISCARD_LATER.getTitle());
+                    return new ReturnT<String>(ReturnT.FAIL_CODE, "block strategy effect："+ExecutorBlockStrategyEnum.DISCARD_LATER.getTitle());
                 }
             } else if (ExecutorBlockStrategyEnum.COVER_EARLY == blockStrategy) {
                 // kill running jobThread
                 if (jobThread.isRunningOrHasQueue()) {
-                    removeOldReason = "阻塞处理策略-生效：" + ExecutorBlockStrategyEnum.COVER_EARLY.getTitle();
+                    removeOldReason = "block strategy effect：" + ExecutorBlockStrategyEnum.COVER_EARLY.getTitle();
 
                     jobThread = null;
                 }

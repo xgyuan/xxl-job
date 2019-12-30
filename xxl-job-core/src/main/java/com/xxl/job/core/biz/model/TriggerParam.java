@@ -13,13 +13,18 @@ public class TriggerParam implements Serializable{
     private String executorHandler;
     private String executorParams;
     private String executorBlockStrategy;
+    private int executorTimeout;
+
+    private long logId;
+    private long logDateTime;
 
     private String glueType;
     private String glueSource;
     private long glueUpdatetime;
 
-    private int logId;
-    private long logDateTim;
+    private int broadcastIndex;
+    private int broadcastTotal;
+
 
     public int getJobId() {
         return jobId;
@@ -53,6 +58,30 @@ public class TriggerParam implements Serializable{
         this.executorBlockStrategy = executorBlockStrategy;
     }
 
+    public int getExecutorTimeout() {
+        return executorTimeout;
+    }
+
+    public void setExecutorTimeout(int executorTimeout) {
+        this.executorTimeout = executorTimeout;
+    }
+
+    public long getLogId() {
+        return logId;
+    }
+
+    public void setLogId(long logId) {
+        this.logId = logId;
+    }
+
+    public long getLogDateTime() {
+        return logDateTime;
+    }
+
+    public void setLogDateTime(long logDateTime) {
+        this.logDateTime = logDateTime;
+    }
+
     public String getGlueType() {
         return glueType;
     }
@@ -77,21 +106,22 @@ public class TriggerParam implements Serializable{
         this.glueUpdatetime = glueUpdatetime;
     }
 
-    public int getLogId() {
-        return logId;
+    public int getBroadcastIndex() {
+        return broadcastIndex;
     }
 
-    public void setLogId(int logId) {
-        this.logId = logId;
+    public void setBroadcastIndex(int broadcastIndex) {
+        this.broadcastIndex = broadcastIndex;
     }
 
-    public long getLogDateTim() {
-        return logDateTim;
+    public int getBroadcastTotal() {
+        return broadcastTotal;
     }
 
-    public void setLogDateTim(long logDateTim) {
-        this.logDateTim = logDateTim;
+    public void setBroadcastTotal(int broadcastTotal) {
+        this.broadcastTotal = broadcastTotal;
     }
+
 
     @Override
     public String toString() {
@@ -100,11 +130,15 @@ public class TriggerParam implements Serializable{
                 ", executorHandler='" + executorHandler + '\'' +
                 ", executorParams='" + executorParams + '\'' +
                 ", executorBlockStrategy='" + executorBlockStrategy + '\'' +
+                ", executorTimeout=" + executorTimeout +
+                ", logId=" + logId +
+                ", logDateTime=" + logDateTime +
                 ", glueType='" + glueType + '\'' +
                 ", glueSource='" + glueSource + '\'' +
                 ", glueUpdatetime=" + glueUpdatetime +
-                ", logId=" + logId +
-                ", logDateTim=" + logDateTim +
+                ", broadcastIndex=" + broadcastIndex +
+                ", broadcastTotal=" + broadcastTotal +
                 '}';
     }
+
 }
